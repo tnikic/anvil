@@ -1,0 +1,6 @@
+# Issue comment normalization across forges
+
+Issue comments are normalized as a `Comment` domain type (not "Note") with a `CommentService` interface exposing List/Get/Create/Update/Delete. GitHub and Forgejo call them "comments" with global IDs; GitLab calls them "notes" with IDs scoped to the issue. The `System` boolean field on `Comment` captures GitLab's intermixed system notes — these are filtered by default in `anvil issue comment list` (matching the GitHub/Forgejo behavior, where system events are a separate timeline API). An `--include-system` flag opts into system notes. Reactions are a `map[string]int` on `Comment`, populated natively for GitHub/Forgejo and empty for GitLab (which has a separate award-emoji API). The CLI subcommand is `anvil issue comment` with full list/view/create/update/delete, consistent with all other entity commands in anvil.
+
+**Status**: accepted
+**Considered Options**: "Comment" vs "Note" naming — "Comment" won because two of three forges use it and it's the more common term. System notes: filter-by-default vs show-everything vs no-distinction. Filter-by-default keeps the common case clean; the `--include-system` flag covers the audit-trail use case.
