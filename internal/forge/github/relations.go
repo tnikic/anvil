@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
-	gh "github.com/google/go-github/v69/github"
+	gh "github.com/google/go-github/v90/github"
 	"github.com/tnikic/anvil/internal/forge"
 )
 
@@ -17,12 +17,12 @@ type relationReader struct {
 
 func (r *relationReader) BlockedBy(ctx context.Context, number int) ([]forge.IssueDependency, error) {
 	u := fmt.Sprintf("repos/%s/%s/issues/%d/dependencies/blocked_by", r.forge.owner, r.forge.repo, number)
-	req, err := r.forge.client.NewRequest("GET", u, nil)
+	req, err := r.forge.client.NewRequest(ctx, "GET", u, nil)
 	if err != nil {
 		return nil, r.forge.translateError("", err)
 	}
 	var ghIssues []*gh.Issue
-	_, err = r.forge.client.Do(ctx, req, &ghIssues)
+	_, err = r.forge.client.Do(req, &ghIssues)
 	if err != nil {
 		return nil, r.forge.translateError(fmt.Sprintf("issue #%d blocked-by", number), err)
 	}
@@ -31,12 +31,12 @@ func (r *relationReader) BlockedBy(ctx context.Context, number int) ([]forge.Iss
 
 func (r *relationReader) Blocking(ctx context.Context, number int) ([]forge.IssueDependency, error) {
 	u := fmt.Sprintf("repos/%s/%s/issues/%d/dependencies/blocking", r.forge.owner, r.forge.repo, number)
-	req, err := r.forge.client.NewRequest("GET", u, nil)
+	req, err := r.forge.client.NewRequest(ctx, "GET", u, nil)
 	if err != nil {
 		return nil, r.forge.translateError("", err)
 	}
 	var ghIssues []*gh.Issue
-	_, err = r.forge.client.Do(ctx, req, &ghIssues)
+	_, err = r.forge.client.Do(req, &ghIssues)
 	if err != nil {
 		return nil, r.forge.translateError(fmt.Sprintf("issue #%d blocking", number), err)
 	}
@@ -45,12 +45,12 @@ func (r *relationReader) Blocking(ctx context.Context, number int) ([]forge.Issu
 
 func (r *relationReader) Children(ctx context.Context, number int) ([]forge.IssueDependency, error) {
 	u := fmt.Sprintf("repos/%s/%s/issues/%d/sub_issues", r.forge.owner, r.forge.repo, number)
-	req, err := r.forge.client.NewRequest("GET", u, nil)
+	req, err := r.forge.client.NewRequest(ctx, "GET", u, nil)
 	if err != nil {
 		return nil, r.forge.translateError("", err)
 	}
 	var ghIssues []*gh.Issue
-	_, err = r.forge.client.Do(ctx, req, &ghIssues)
+	_, err = r.forge.client.Do(req, &ghIssues)
 	if err != nil {
 		return nil, r.forge.translateError(fmt.Sprintf("issue #%d children", number), err)
 	}
@@ -59,12 +59,12 @@ func (r *relationReader) Children(ctx context.Context, number int) ([]forge.Issu
 
 func (r *relationReader) Parent(ctx context.Context, number int) (*forge.IssueDependency, error) {
 	u := fmt.Sprintf("repos/%s/%s/issues/%d/parent", r.forge.owner, r.forge.repo, number)
-	req, err := r.forge.client.NewRequest("GET", u, nil)
+	req, err := r.forge.client.NewRequest(ctx, "GET", u, nil)
 	if err != nil {
 		return nil, r.forge.translateError("", err)
 	}
 	var ghIssue gh.Issue
-	_, err = r.forge.client.Do(ctx, req, &ghIssue)
+	_, err = r.forge.client.Do(req, &ghIssue)
 	if err != nil {
 		var ghErr *gh.ErrorResponse
 		if errors.As(err, &ghErr) && ghErr.Response.StatusCode == http.StatusNotFound {
@@ -101,11 +101,11 @@ func newRelationGuard(f *Forge) *forge.RelationGuard {
 
 func (f *Forge) addBlocks(ctx context.Context, number, target int) error {
 	u := fmt.Sprintf("repos/%s/%s/issues/%d/dependencies/blocked_by", f.owner, f.repo, target)
-	req, err := f.client.NewRequest("POST", u, &dependencyRequest{IssueNumber: number})
+	req, err := f.client.NewRequest(ctx, "POST", u, &dependencyRequest{IssueNumber: number})
 	if err != nil {
 		return f.translateError("", err)
 	}
-	_, err = f.client.Do(ctx, req, nil)
+	_, err = f.client.Do(req, nil)
 	if err != nil {
 		return f.translateError(fmt.Sprintf("add blocks #%d → #%d", number, target), err)
 	}
@@ -114,11 +114,11 @@ func (f *Forge) addBlocks(ctx context.Context, number, target int) error {
 
 func (f *Forge) removeBlocks(ctx context.Context, number, target int) error {
 	u := fmt.Sprintf("repos/%s/%s/issues/%d/dependencies/blocked_by", f.owner, f.repo, target)
-	req, err := f.client.NewRequest("DELETE", u, &dependencyRequest{IssueNumber: number})
+	req, err := f.client.NewRequest(ctx, "DELETE", u, &dependencyRequest{IssueNumber: number})
 	if err != nil {
 		return f.translateError("", err)
 	}
-	_, err = f.client.Do(ctx, req, nil)
+	_, err = f.client.Do(req, nil)
 	if err != nil {
 		return f.translateError(fmt.Sprintf("remove blocks #%d → #%d", number, target), err)
 	}
@@ -127,11 +127,11 @@ func (f *Forge) removeBlocks(ctx context.Context, number, target int) error {
 
 func (f *Forge) addParentOf(ctx context.Context, number, child int) error {
 	u := fmt.Sprintf("repos/%s/%s/issues/%d/sub_issues", f.owner, f.repo, number)
-	req, err := f.client.NewRequest("POST", u, &subIssueRequest{SubIssueID: child})
+	req, err := f.client.NewRequest(ctx, "POST", u, &subIssueRequest{SubIssueID: child})
 	if err != nil {
 		return f.translateError("", err)
 	}
-	_, err = f.client.Do(ctx, req, nil)
+	_, err = f.client.Do(req, nil)
 	if err != nil {
 		return f.translateError(fmt.Sprintf("add parent #%d → #%d", number, child), err)
 	}
@@ -140,11 +140,11 @@ func (f *Forge) addParentOf(ctx context.Context, number, child int) error {
 
 func (f *Forge) removeParentOf(ctx context.Context, number, child int) error {
 	u := fmt.Sprintf("repos/%s/%s/issues/%d/sub_issues", f.owner, f.repo, number)
-	req, err := f.client.NewRequest("DELETE", u, &subIssueRequest{SubIssueID: child})
+	req, err := f.client.NewRequest(ctx, "DELETE", u, &subIssueRequest{SubIssueID: child})
 	if err != nil {
 		return f.translateError("", err)
 	}
-	_, err = f.client.Do(ctx, req, nil)
+	_, err = f.client.Do(req, nil)
 	if err != nil {
 		return f.translateError(fmt.Sprintf("remove parent #%d → #%d", number, child), err)
 	}

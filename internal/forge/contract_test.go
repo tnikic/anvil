@@ -10,7 +10,7 @@ import (
 	"time"
 
 	gitea "code.gitea.io/sdk/gitea"
-	gh "github.com/google/go-github/v69/github"
+	gh "github.com/google/go-github/v90/github"
 	"github.com/tnikic/anvil/internal/forge"
 	forgejoadapter "github.com/tnikic/anvil/internal/forge/forgejo"
 	"github.com/tnikic/anvil/internal/forge/forgetest"
@@ -101,8 +101,8 @@ func TestContract_LabelNormalization(t *testing.T) {
 		// GitHub (httptest)
 		ghForge := newGitHubForge(t, func(w http.ResponseWriter, r *http.Request) {
 			label := &gh.Label{
-				Name:        gh.Ptr("kind:bug"),
-				Color:       gh.Ptr("ff0000"),
+				Name:        "kind:bug",
+				Color:       "ff0000",
 				Description: gh.Ptr("A bug"),
 			}
 			respondJSON(w, http.StatusCreated, label)
@@ -182,8 +182,8 @@ func TestContract_LabelNormalization(t *testing.T) {
 		// GitHub (httptest)
 		ghForge := newGitHubForge(t, func(w http.ResponseWriter, r *http.Request) {
 			label := &gh.Label{
-				Name:  gh.Ptr("good-first-issue"),
-				Color: gh.Ptr("7057ff"),
+				Name:  "good-first-issue",
+				Color: "7057ff",
 			}
 			respondJSON(w, http.StatusCreated, label)
 		})
@@ -519,8 +519,8 @@ func TestContract_LabelCRUD(t *testing.T) {
 		ghForge := newGitHubForge(t, func(w http.ResponseWriter, r *http.Request) {
 			if r.Method == http.MethodPost {
 				label := &gh.Label{
-					Name:        gh.Ptr("priority:high"),
-					Color:       gh.Ptr("ff0000"),
+					Name:        "priority:high",
+					Color:       "ff0000",
 					Description: gh.Ptr(""),
 				}
 				createdLabel = "priority:high"
@@ -529,8 +529,8 @@ func TestContract_LabelCRUD(t *testing.T) {
 			}
 			// GET — list
 			labels := []*gh.Label{{
-				Name:  gh.Ptr(createdLabel),
-				Color: gh.Ptr("ff0000"),
+				Name:  createdLabel,
+				Color: "ff0000",
 			}}
 			respondJSON(w, http.StatusOK, labels)
 		})
@@ -647,7 +647,7 @@ func TestContract_LabelCRUD(t *testing.T) {
 		// GitHub (httptest)
 		ghForge := newGitHubForge(t, func(w http.ResponseWriter, r *http.Request) {
 			if r.Method == http.MethodPost {
-				label := &gh.Label{Name: gh.Ptr("enhancement"), Color: gh.Ptr("0052cc")}
+				label := &gh.Label{Name: "enhancement", Color: "0052cc"}
 				respondJSON(w, http.StatusCreated, label)
 				return
 			}

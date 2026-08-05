@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	gh "github.com/google/go-github/v69/github"
+	gh "github.com/google/go-github/v90/github"
 	"github.com/tnikic/anvil/internal/forge"
 	githubadapter "github.com/tnikic/anvil/internal/forge/github"
 )
@@ -109,8 +109,8 @@ func TestIssueListMapping(t *testing.T) {
 				CreatedAt: &gh.Timestamp{},
 				UpdatedAt: &gh.Timestamp{},
 				Labels: []*gh.Label{
-					{Name: gh.Ptr("kind:bug"), Color: gh.Ptr("ff0000"), Description: gh.Ptr("A bug")},
-					{Name: gh.Ptr("good-first-issue"), Color: gh.Ptr("7057ff"), Description: gh.Ptr("Good for newcomers")},
+					{Name: "kind:bug", Color: "ff0000", Description: gh.Ptr("A bug")},
+					{Name: "good-first-issue", Color: "7057ff", Description: gh.Ptr("Good for newcomers")},
 				},
 			},
 		}
@@ -273,9 +273,9 @@ func TestIssueReopenMapping(t *testing.T) {
 func TestLabelListMapping(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		labels := []*gh.Label{
-			{Name: gh.Ptr("kind:bug"), Color: gh.Ptr("d73a4a"), Description: gh.Ptr("Something broken")},
-			{Name: gh.Ptr("priority:high"), Color: gh.Ptr("ff0000"), Description: gh.Ptr("Urgent")},
-			{Name: gh.Ptr("good-first-issue"), Color: gh.Ptr("7057ff"), Description: gh.Ptr("Good for newcomers")},
+			{Name: "kind:bug", Color: "d73a4a", Description: gh.Ptr("Something broken")},
+			{Name: "priority:high", Color: "ff0000", Description: gh.Ptr("Urgent")},
+			{Name: "good-first-issue", Color: "7057ff", Description: gh.Ptr("Good for newcomers")},
 		}
 		respondJSON(w, http.StatusOK, labels)
 	}))
@@ -309,8 +309,8 @@ func TestLabelCreateMapping(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// The adapter sends the full name "kind:bug" to GitHub
 		label := &gh.Label{
-			Name:        gh.Ptr("kind:bug"),
-			Color:       gh.Ptr("d73a4a"),
+			Name:        "kind:bug",
+			Color:       "d73a4a",
 			Description: gh.Ptr("A bug"),
 		}
 		respondJSON(w, http.StatusCreated, label)
@@ -336,8 +336,8 @@ func TestLabelCreateMapping(t *testing.T) {
 func TestLabelCreateUnscopedMapping(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		label := &gh.Label{
-			Name:  gh.Ptr("enhancement"),
-			Color: gh.Ptr("0052cc"),
+			Name:  "enhancement",
+			Color: "0052cc",
 		}
 		respondJSON(w, http.StatusCreated, label)
 	}))
@@ -360,8 +360,8 @@ func TestLabelCreateUnscopedMapping(t *testing.T) {
 func TestLabelUpdateMapping(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		label := &gh.Label{
-			Name:        gh.Ptr("kind:bug"),
-			Color:       gh.Ptr("ff0000"),
+			Name:        "kind:bug",
+			Color:       "ff0000",
 			Description: gh.Ptr("Updated description"),
 		}
 		respondJSON(w, http.StatusOK, label)
@@ -680,8 +680,8 @@ func TestIssueListPagination(t *testing.T) {
 func TestLabelServiceAllMethods(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		label := &gh.Label{
-			Name:        gh.Ptr("kind:feature"),
-			Color:       gh.Ptr("0052cc"),
+			Name:        "kind:feature",
+			Color:       "0052cc",
 			Description: gh.Ptr("New feature"),
 		}
 		respondJSON(w, http.StatusCreated, label)

@@ -9,10 +9,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"time"
 
-	gh "github.com/google/go-github/v69/github"
+	gh "github.com/google/go-github/v90/github"
 	"github.com/tnikic/anvil/internal/forge"
 )
 
@@ -41,11 +40,12 @@ type Forge struct {
 // For GitHub Enterprise, host must be the enterprise domain and New will
 // configure the API base URL accordingly.
 func New(host, owner, repo string, httpClient *http.Client) *Forge {
-	c := gh.NewClient(httpClient)
-	if host != "" && host != "github.com" {
-		scheme, cleanHost := forge.ParseHost(host)
-		c.BaseURL, _ = url.Parse(scheme + "://" + cleanHost + "/api/v3/")
-		c.UploadURL, _ = url.Parse(scheme + "://" + cleanHost + "/api/uploads/")
+	c, err := newGHClient(host, httpClient)
+	if err != nil {
+		// Configuration error — invalid enterprise URLs. This is a programmer
+		// error akin to url.Parse failures in the old code, which were silently
+		// discarded. Panic to fail fast.
+		panic("github.New: " + err.Error())
 	}
 	f := &Forge{client: c, host: host, owner: owner, repo: repo}
 	f.issueSvc = &issueService{forge: f}
@@ -54,6 +54,21 @@ func New(host, owner, repo string, httpClient *http.Client) *Forge {
 	f.relationSvc = newRelationGuard(f)
 	f.commentSvc = &commentService{forge: f}
 	return f
+}
+
+// newGHClient creates a go-github Client, configuring enterprise URLs when
+// host is not the public github.com.
+func newGHClient(host string, httpClient *http.Client) (*gh.Client, error) {
+	if host == "" || host == "github.com" {
+		return gh.NewClient(gh.WithHTTPClient(httpClient))
+	}
+	scheme, cleanHost := forge.ParseHost(host)
+	baseURL := scheme + "://" + cleanHost + "/api/v3/"
+	uploadURL := scheme + "://" + cleanHost + "/api/uploads/"
+	return gh.NewClient(
+		gh.WithHTTPClient(httpClient),
+		gh.WithEnterpriseURLs(baseURL, uploadURL),
+	)
 }
 
 // Issues returns the IssueService for this forge.
@@ -231,7 +246,7 @@ func (s *issueService) List(ctx context.Context, opts forge.IssueListOptions) ([
 	}
 
 	allIssues, err := forge.Paginate(limit, func(page int) (forge.Page[forge.Issue], error) {
-		ghOpts.Page = page
+		ghOpts.ListOptions.Page = page
 		ghIssues, resp, err := s.forge.client.Issues.ListByRepo(ctx, s.forge.owner, s.forge.repo, ghOpts)
 		if err != nil {
 			return forge.Page[forge.Issue]{}, s.forge.translateError("", err)
@@ -254,18 +269,17 @@ func (s *issueService) Get(ctx context.Context, opts forge.IssueGetOptions) (*fo
 }
 
 func (s *issueService) Create(ctx context.Context, opts forge.IssueCreateOptions) (*forge.Issue, error) {
-	req := &gh.IssueRequest{}
-	if opts.Title != nil {
-		req.Title = opts.Title
+	req := gh.CreateIssueRequest{
+		Title: forge.StringVal(opts.Title),
 	}
 	if opts.Body != nil {
 		req.Body = opts.Body
 	}
 	if len(opts.Labels) > 0 {
-		req.Labels = &opts.Labels
+		req.Labels = opts.Labels
 	}
 	if len(opts.Assignees) > 0 {
-		req.Assignees = &opts.Assignees
+		req.Assignees = opts.Assignees
 	}
 	ghIssue, _, err := s.forge.client.Issues.Create(ctx, s.forge.owner, s.forge.repo, req)
 	if err != nil {
@@ -275,18 +289,13 @@ func (s *issueService) Create(ctx context.Context, opts forge.IssueCreateOptions
 }
 
 func (s *issueService) Update(ctx context.Context, opts forge.IssueUpdateOptions) (*forge.Issue, error) {
-	req := &gh.IssueRequest{}
-	if opts.Title != nil {
-		req.Title = opts.Title
-	}
-	if opts.Body != nil {
-		req.Body = opts.Body
-	}
-	if opts.State != nil {
-		req.State = opts.State
+	req := gh.UpdateIssueRequest{
+		Title: opts.Title,
+		Body:  opts.Body,
+		State: opts.State,
 	}
 	if len(opts.Assignees) > 0 {
-		req.Assignees = &opts.Assignees
+		req.Assignees = opts.Assignees
 	}
 
 	// Handle label operations.
@@ -295,7 +304,7 @@ func (s *issueService) Update(ctx context.Context, opts forge.IssueUpdateOptions
 	// the new set, and patch with the combined list.
 	hasIncremental := len(opts.AddLabels) > 0 || len(opts.RemoveLabels) > 0
 	if len(opts.Labels) > 0 {
-		req.Labels = &opts.Labels
+		req.Labels = opts.Labels
 	} else if hasIncremental {
 		// Fetch current issue to get existing labels.
 		current, _, err := s.forge.client.Issues.Get(ctx, s.forge.owner, s.forge.repo, opts.Number)
@@ -324,10 +333,10 @@ func (s *issueService) Update(ctx context.Context, opts forge.IssueUpdateOptions
 		for name := range labelSet {
 			allLabels = append(allLabels, name)
 		}
-		req.Labels = &allLabels
+		req.Labels = allLabels
 	}
 
-	ghIssue, _, err := s.forge.client.Issues.Edit(ctx, s.forge.owner, s.forge.repo, opts.Number, req)
+	ghIssue, _, err := s.forge.client.Issues.Update(ctx, s.forge.owner, s.forge.repo, opts.Number, req)
 	if err != nil {
 		return nil, s.forge.translateError(fmt.Sprintf("issue #%d", opts.Number), err)
 	}
@@ -336,8 +345,8 @@ func (s *issueService) Update(ctx context.Context, opts forge.IssueUpdateOptions
 
 func (s *issueService) Close(ctx context.Context, opts forge.IssueCloseOptions) (*forge.Issue, error) {
 	state := "closed"
-	req := &gh.IssueRequest{State: &state}
-	ghIssue, _, err := s.forge.client.Issues.Edit(ctx, s.forge.owner, s.forge.repo, opts.Number, req)
+	req := gh.UpdateIssueRequest{State: &state}
+	ghIssue, _, err := s.forge.client.Issues.Update(ctx, s.forge.owner, s.forge.repo, opts.Number, req)
 	if err != nil {
 		return nil, s.forge.translateError(fmt.Sprintf("issue #%d", opts.Number), err)
 	}
@@ -348,8 +357,8 @@ func (s *issueService) Close(ctx context.Context, opts forge.IssueCloseOptions) 
 func (s *issueService) Reopen(ctx context.Context, opts forge.IssueReopenOptions) (*forge.Issue, error) {
 	state := "open"
 	stateReason := "reopened"
-	req := &gh.IssueRequest{State: &state, StateReason: &stateReason}
-	ghIssue, _, err := s.forge.client.Issues.Edit(ctx, s.forge.owner, s.forge.repo, opts.Number, req)
+	req := gh.UpdateIssueRequest{State: &state, StateReason: &stateReason}
+	ghIssue, _, err := s.forge.client.Issues.Update(ctx, s.forge.owner, s.forge.repo, opts.Number, req)
 	if err != nil {
 		return nil, s.forge.translateError(fmt.Sprintf("issue #%d", opts.Number), err)
 	}
@@ -381,12 +390,12 @@ func (s *labelService) List(ctx context.Context, opts forge.LabelListOptions) ([
 
 func (s *labelService) Create(ctx context.Context, opts forge.LabelCreateOptions) (*forge.Label, error) {
 	fullName := forge.LabelFullName(forge.StringVal(opts.Scope), opts.Name, ":")
-	ghLabel := &gh.Label{
-		Name:        &fullName,
+	req := gh.CreateIssueLabelRequest{
+		Name:        fullName,
 		Color:       opts.Color,
 		Description: opts.Description,
 	}
-	created, _, err := s.forge.client.Issues.CreateLabel(ctx, s.forge.owner, s.forge.repo, ghLabel)
+	created, _, err := s.forge.client.Issues.CreateLabel(ctx, s.forge.owner, s.forge.repo, req)
 	if err != nil {
 		return nil, s.forge.translateError("", err)
 	}
@@ -396,7 +405,10 @@ func (s *labelService) Create(ctx context.Context, opts forge.LabelCreateOptions
 
 func (s *labelService) Update(ctx context.Context, opts forge.LabelUpdateOptions) (*forge.Label, error) {
 	oldFullName := forge.LabelFullName(opts.Scope, opts.Name, ":")
-	newFullName := oldFullName
+	req := gh.UpdateIssueLabelRequest{
+		Color:       opts.Color,
+		Description: opts.Description,
+	}
 	if opts.NewName != nil || opts.NewScope != nil {
 		name := opts.Name
 		scope := opts.Scope
@@ -406,14 +418,10 @@ func (s *labelService) Update(ctx context.Context, opts forge.LabelUpdateOptions
 		if opts.NewScope != nil {
 			scope = *opts.NewScope
 		}
-		newFullName = forge.LabelFullName(scope, name, ":")
+		newFullName := forge.LabelFullName(scope, name, ":")
+		req.NewName = &newFullName
 	}
-	ghLabel := &gh.Label{
-		Name:        &newFullName,
-		Color:       opts.Color,
-		Description: opts.Description,
-	}
-	updated, _, err := s.forge.client.Issues.EditLabel(ctx, s.forge.owner, s.forge.repo, oldFullName, ghLabel)
+	updated, _, err := s.forge.client.Issues.UpdateLabel(ctx, s.forge.owner, s.forge.repo, oldFullName, req)
 	if err != nil {
 		return nil, s.forge.translateError(fmt.Sprintf("label %q", oldFullName), err)
 	}
@@ -503,18 +511,15 @@ func (s *prService) Get(ctx context.Context, opts forge.PRGetOptions) (*forge.PR
 }
 
 func (s *prService) Create(ctx context.Context, opts forge.PRCreateOptions) (*forge.PR, error) {
-	req := &gh.NewPullRequest{}
+	req := gh.CreatePullRequest{
+		Head: forge.StringVal(opts.HeadRef),
+		Base: forge.StringVal(opts.BaseRef),
+	}
 	if opts.Title != nil {
 		req.Title = opts.Title
 	}
 	if opts.Body != nil {
 		req.Body = opts.Body
-	}
-	if opts.HeadRef != nil {
-		req.Head = opts.HeadRef
-	}
-	if opts.BaseRef != nil {
-		req.Base = opts.BaseRef
 	}
 	if opts.Draft != nil {
 		req.Draft = opts.Draft

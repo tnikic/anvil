@@ -4,7 +4,7 @@ go 1.26.5
 
 require (
 	code.gitea.io/sdk/gitea v0.25.1
-	github.com/google/go-github/v69 v69.2.0
+	github.com/google/go-github/v90 v90.0.0
 	github.com/spf13/cobra v1.10.2
 	github.com/toon-format/toon-go v0.0.0-20251202084852-7ca0e27c4e8c
 	gitlab.com/gitlab-org/api/client-go v1.46.0
