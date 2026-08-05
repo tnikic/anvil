@@ -705,6 +705,197 @@ func TestLabelServiceAllMethods(t *testing.T) {
 	}
 }
 
+// ---- Relation reads ----
+
+func TestRelationBlockedBy(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		issues := []*gh.Issue{
+			{
+				Number:  gh.Ptr(2),
+				Title:   gh.Ptr("Blocking issue"),
+				State:   gh.Ptr("open"),
+				User:    &gh.User{Login: gh.Ptr("alice")},
+				HTMLURL: gh.Ptr("https://github.com/owner/repo/issues/2"),
+			},
+			{
+				Number:  gh.Ptr(3),
+				Title:   gh.Ptr("Another blocker"),
+				State:   gh.Ptr("closed"),
+				User:    &gh.User{Login: gh.Ptr("bob")},
+				HTMLURL: gh.Ptr("https://github.com/owner/repo/issues/3"),
+			},
+		}
+		respondJSON(w, http.StatusOK, issues)
+	}))
+	defer srv.Close()
+
+	f := githubadapter.New(srv.URL, "owner", "repo", srv.Client())
+
+	deps, err := f.Relations().BlockedBy(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(deps) != 2 {
+		t.Fatalf("expected 2 dependencies, got %d", len(deps))
+	}
+	if deps[0].Number != 2 {
+		t.Errorf("dep[0].Number = %d, want 2", deps[0].Number)
+	}
+	if deps[0].Title != "Blocking issue" {
+		t.Errorf("dep[0].Title = %q", deps[0].Title)
+	}
+	if deps[0].State != "open" {
+		t.Errorf("dep[0].State = %q", deps[0].State)
+	}
+	if deps[0].Direction != forge.DirBlockedBy {
+		t.Errorf("dep[0].Direction = %q, want %q", deps[0].Direction, forge.DirBlockedBy)
+	}
+	if deps[1].Number != 3 {
+		t.Errorf("dep[1].Number = %d, want 3", deps[1].Number)
+	}
+	if deps[1].State != "closed" {
+		t.Errorf("dep[1].State = %q", deps[1].State)
+	}
+}
+
+func TestRelationBlocking(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		issues := []*gh.Issue{
+			{
+				Number:  gh.Ptr(5),
+				Title:   gh.Ptr("Blocked by me"),
+				State:   gh.Ptr("open"),
+				User:    &gh.User{Login: gh.Ptr("carol")},
+				HTMLURL: gh.Ptr("https://github.com/owner/repo/issues/5"),
+			},
+		}
+		respondJSON(w, http.StatusOK, issues)
+	}))
+	defer srv.Close()
+
+	f := githubadapter.New(srv.URL, "owner", "repo", srv.Client())
+
+	deps, err := f.Relations().Blocking(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(deps) != 1 {
+		t.Fatalf("expected 1 dependency, got %d", len(deps))
+	}
+	if deps[0].Number != 5 {
+		t.Errorf("dep[0].Number = %d, want 5", deps[0].Number)
+	}
+	if deps[0].Direction != forge.DirBlocks {
+		t.Errorf("dep[0].Direction = %q, want %q", deps[0].Direction, forge.DirBlocks)
+	}
+}
+
+func TestRelationChildren(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// SubIssue is the same shape as Issue; respond with regular issues.
+		issues := []*gh.Issue{
+			{
+				Number:  gh.Ptr(10),
+				Title:   gh.Ptr("Child task"),
+				State:   gh.Ptr("open"),
+				User:    &gh.User{Login: gh.Ptr("dev")},
+				HTMLURL: gh.Ptr("https://github.com/owner/repo/issues/10"),
+			},
+		}
+		respondJSON(w, http.StatusOK, issues)
+	}))
+	defer srv.Close()
+
+	f := githubadapter.New(srv.URL, "owner", "repo", srv.Client())
+
+	deps, err := f.Relations().Children(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(deps) != 1 {
+		t.Fatalf("expected 1 child, got %d", len(deps))
+	}
+	if deps[0].Number != 10 {
+		t.Errorf("dep[0].Number = %d, want 10", deps[0].Number)
+	}
+	if deps[0].Title != "Child task" {
+		t.Errorf("dep[0].Title = %q", deps[0].Title)
+	}
+	if deps[0].Direction != forge.DirChild {
+		t.Errorf("dep[0].Direction = %q, want %q", deps[0].Direction, forge.DirChild)
+	}
+}
+
+func TestRelationParentExists(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		issue := &gh.Issue{
+			Number:  gh.Ptr(42),
+			Title:   gh.Ptr("Parent issue"),
+			State:   gh.Ptr("open"),
+			User:    &gh.User{Login: gh.Ptr("admin")},
+			HTMLURL: gh.Ptr("https://github.com/owner/repo/issues/42"),
+		}
+		respondJSON(w, http.StatusOK, issue)
+	}))
+	defer srv.Close()
+
+	f := githubadapter.New(srv.URL, "owner", "repo", srv.Client())
+
+	dep, err := f.Relations().Parent(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if dep == nil {
+		t.Fatal("expected parent dependency, got nil")
+	}
+	if dep.Number != 42 {
+		t.Errorf("dep.Number = %d, want 42", dep.Number)
+	}
+	if dep.Title != "Parent issue" {
+		t.Errorf("dep.Title = %q", dep.Title)
+	}
+	if dep.Direction != forge.DirParent {
+		t.Errorf("dep.Direction = %q, want %q", dep.Direction, forge.DirParent)
+	}
+}
+
+func TestRelationParentNotFound(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_ = json.NewEncoder(w).Encode(map[string]string{"message": "Not Found"})
+	}))
+	defer srv.Close()
+
+	f := githubadapter.New(srv.URL, "owner", "repo", srv.Client())
+
+	dep, err := f.Relations().Parent(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("unexpected error for no-parent case: %v", err)
+	}
+	if dep != nil {
+		t.Errorf("expected nil dependency for no parent, got %+v", dep)
+	}
+}
+
+func TestRelationEmpty(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		respondJSON(w, http.StatusOK, []*gh.Issue{})
+	}))
+	defer srv.Close()
+
+	f := githubadapter.New(srv.URL, "owner", "repo", srv.Client())
+
+	// All list methods should return empty slices, not errors.
+	deps, err := f.Relations().BlockedBy(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(deps) != 0 {
+		t.Errorf("expected 0 deps, got %d", len(deps))
+	}
+}
+
 // ---- Context cancellation ----
 
 func TestContextCancellation(t *testing.T) {

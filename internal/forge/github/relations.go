@@ -16,13 +16,7 @@ type relationReader struct {
 }
 
 func (r *relationReader) BlockedBy(ctx context.Context, number int) ([]forge.IssueDependency, error) {
-	u := fmt.Sprintf("repos/%s/%s/issues/%d/dependencies/blocked_by", r.forge.owner, r.forge.repo, number)
-	req, err := r.forge.client.NewRequest(ctx, "GET", u, nil)
-	if err != nil {
-		return nil, r.forge.translateError("", err)
-	}
-	var ghIssues []*gh.Issue
-	_, err = r.forge.client.Do(req, &ghIssues)
+	ghIssues, _, err := r.forge.client.Issues.ListBlockedBy(ctx, r.forge.owner, r.forge.repo, int64(number), nil)
 	if err != nil {
 		return nil, r.forge.translateError(fmt.Sprintf("issue #%d blocked-by", number), err)
 	}
@@ -30,13 +24,7 @@ func (r *relationReader) BlockedBy(ctx context.Context, number int) ([]forge.Iss
 }
 
 func (r *relationReader) Blocking(ctx context.Context, number int) ([]forge.IssueDependency, error) {
-	u := fmt.Sprintf("repos/%s/%s/issues/%d/dependencies/blocking", r.forge.owner, r.forge.repo, number)
-	req, err := r.forge.client.NewRequest(ctx, "GET", u, nil)
-	if err != nil {
-		return nil, r.forge.translateError("", err)
-	}
-	var ghIssues []*gh.Issue
-	_, err = r.forge.client.Do(req, &ghIssues)
+	ghIssues, _, err := r.forge.client.Issues.ListBlocking(ctx, r.forge.owner, r.forge.repo, int64(number), nil)
 	if err != nil {
 		return nil, r.forge.translateError(fmt.Sprintf("issue #%d blocking", number), err)
 	}
@@ -44,27 +32,19 @@ func (r *relationReader) Blocking(ctx context.Context, number int) ([]forge.Issu
 }
 
 func (r *relationReader) Children(ctx context.Context, number int) ([]forge.IssueDependency, error) {
-	u := fmt.Sprintf("repos/%s/%s/issues/%d/sub_issues", r.forge.owner, r.forge.repo, number)
-	req, err := r.forge.client.NewRequest(ctx, "GET", u, nil)
-	if err != nil {
-		return nil, r.forge.translateError("", err)
-	}
-	var ghIssues []*gh.Issue
-	_, err = r.forge.client.Do(req, &ghIssues)
+	subIssues, _, err := r.forge.client.SubIssue.ListByIssue(ctx, r.forge.owner, r.forge.repo, int64(number), nil)
 	if err != nil {
 		return nil, r.forge.translateError(fmt.Sprintf("issue #%d children", number), err)
+	}
+	ghIssues := make([]*gh.Issue, len(subIssues))
+	for i, si := range subIssues {
+		ghIssues[i] = (*gh.Issue)(si)
 	}
 	return mapIssueDeps(ghIssues, forge.DirChild), nil
 }
 
 func (r *relationReader) Parent(ctx context.Context, number int) (*forge.IssueDependency, error) {
-	u := fmt.Sprintf("repos/%s/%s/issues/%d/parent", r.forge.owner, r.forge.repo, number)
-	req, err := r.forge.client.NewRequest(ctx, "GET", u, nil)
-	if err != nil {
-		return nil, r.forge.translateError("", err)
-	}
-	var ghIssue gh.Issue
-	_, err = r.forge.client.Do(req, &ghIssue)
+	ghIssue, _, err := r.forge.client.SubIssue.GetParentIssue(ctx, r.forge.owner, r.forge.repo, int64(number))
 	if err != nil {
 		var ghErr *gh.ErrorResponse
 		if errors.As(err, &ghErr) && ghErr.Response.StatusCode == http.StatusNotFound {
