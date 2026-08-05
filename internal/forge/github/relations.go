@@ -2,7 +2,9 @@ package github
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 
 	gh "github.com/google/go-github/v69/github"
 	"github.com/tnikic/anvil/internal/forge"
@@ -64,6 +66,10 @@ func (r *relationReader) Parent(ctx context.Context, number int) (*forge.IssueDe
 	var ghIssue gh.Issue
 	_, err = r.forge.client.Do(ctx, req, &ghIssue)
 	if err != nil {
+		var ghErr *gh.ErrorResponse
+		if errors.As(err, &ghErr) && ghErr.Response.StatusCode == http.StatusNotFound {
+			return nil, nil // no parent — valid state
+		}
 		return nil, r.forge.translateError(fmt.Sprintf("issue #%d parent", number), err)
 	}
 	if ghIssue.GetNumber() == 0 {
@@ -165,7 +171,7 @@ func mapIssueDeps(ghIssues []*gh.Issue, dir forge.IssueDependencyDirection) []fo
 
 // dependencyRequest is the JSON body for adding/removing a blocking dependency.
 type dependencyRequest struct {
-	IssueNumber int `json:"issue_number"`
+	IssueNumber int `json:"issue_id"`
 }
 
 // subIssueRequest is the JSON body for adding/removing a sub-issue.
