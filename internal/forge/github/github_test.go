@@ -915,3 +915,275 @@ func TestContextCancellation(t *testing.T) {
 		t.Fatal("expected error for canceled context")
 	}
 }
+
+// ---- Relation writes ----
+
+func TestRelationAddBlocks(t *testing.T) {
+	var (
+		gotPostBody  string
+		gotPostPath  string
+		issueGetCall int
+	)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		// idempotency check: BlockedBy(1) — returns empty (2 does NOT block 1 yet)
+		case r.Method == "GET" && strings.Contains(r.URL.Path, "/dependencies/blocked_by"):
+			respondJSON(w, http.StatusOK, []*gh.Issue{})
+
+		// issueNumberToID(2) — fetch issue 2 to get its global ID
+		case r.Method == "GET" && strings.HasSuffix(r.URL.Path, "/issues/2"):
+			issueGetCall++
+			respondJSON(w, http.StatusOK, &gh.Issue{Number: gh.Ptr(2), ID: gh.Ptr(int64(200))})
+
+		// AddBlockedBy(1, {IssueID: 200})
+		case r.Method == "POST" && strings.Contains(r.URL.Path, "/dependencies/blocked_by"):
+			gotPostPath = r.URL.Path
+			var body gh.IssueDependencyRequest
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			b, _ := json.Marshal(body)
+			gotPostBody = string(b)
+			respondJSON(w, http.StatusOK, &gh.Issue{Number: gh.Ptr(2)})
+
+		default:
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}))
+	defer srv.Close()
+
+	f := githubadapter.New(srv.URL, "owner", "repo", srv.Client())
+
+	err := f.Relations().AddBlocks(context.Background(), 2, 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if issueGetCall != 1 {
+		t.Errorf("issueNumberToID called %d times, want 1", issueGetCall)
+	}
+	if gotPostBody != `{"issue_id":200}` {
+		t.Errorf("POST body = %q, want %q", gotPostBody, `{"issue_id":200}`)
+	}
+	if !strings.HasSuffix(gotPostPath, "/issues/1/dependencies/blocked_by") {
+		t.Errorf("POST path = %q, want suffix .../issues/1/dependencies/blocked_by", gotPostPath)
+	}
+}
+
+func TestRelationAddBlocksIdempotent(t *testing.T) {
+	var apiCalls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		apiCalls++
+		// idempotency check: BlockedBy(1) — returns issue 2 already in the list
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/dependencies/blocked_by") {
+			respondJSON(w, http.StatusOK, []*gh.Issue{
+				{Number: gh.Ptr(2), Title: gh.Ptr("Blocker"), State: gh.Ptr("open")},
+			})
+			return
+		}
+		t.Errorf("unexpected API call: %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	f := githubadapter.New(srv.URL, "owner", "repo", srv.Client())
+
+	err := f.Relations().AddBlocks(context.Background(), 2, 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if apiCalls != 1 {
+		t.Errorf("expected 1 API call for idempotency check, got %d", apiCalls)
+	}
+}
+
+func TestRelationRemoveBlocks(t *testing.T) {
+	var gotDeletePath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		// idempotency check: BlockedBy(1) — returns issue 2 (so it exists)
+		case r.Method == "GET" && strings.Contains(r.URL.Path, "/dependencies/blocked_by"):
+			respondJSON(w, http.StatusOK, []*gh.Issue{
+				{Number: gh.Ptr(2), Title: gh.Ptr("Blocker"), State: gh.Ptr("open")},
+			})
+
+		// issueNumberToID(2)
+		case r.Method == "GET" && strings.HasSuffix(r.URL.Path, "/issues/2"):
+			respondJSON(w, http.StatusOK, &gh.Issue{Number: gh.Ptr(2), ID: gh.Ptr(int64(200))})
+
+		// RemoveBlockedBy(1, 200)
+		case r.Method == "DELETE" && strings.Contains(r.URL.Path, "/dependencies/blocked_by/"):
+			gotDeletePath = r.URL.Path
+			respondJSON(w, http.StatusOK, &gh.Issue{Number: gh.Ptr(2)})
+
+		default:
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}))
+	defer srv.Close()
+
+	f := githubadapter.New(srv.URL, "owner", "repo", srv.Client())
+
+	err := f.Relations().RemoveBlocks(context.Background(), 2, 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.HasSuffix(gotDeletePath, "/issues/1/dependencies/blocked_by/200") {
+		t.Errorf("DELETE path = %q, want suffix .../issues/1/dependencies/blocked_by/200", gotDeletePath)
+	}
+}
+
+func TestRelationRemoveBlocksIdempotent(t *testing.T) {
+	var apiCalls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		apiCalls++
+		// idempotency check: BlockedBy(1) — returns empty
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/dependencies/blocked_by") {
+			respondJSON(w, http.StatusOK, []*gh.Issue{})
+			return
+		}
+		t.Errorf("unexpected API call: %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	f := githubadapter.New(srv.URL, "owner", "repo", srv.Client())
+
+	err := f.Relations().RemoveBlocks(context.Background(), 2, 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if apiCalls != 1 {
+		t.Errorf("expected 1 API call for idempotency check, got %d", apiCalls)
+	}
+}
+
+func TestRelationAddParentOf(t *testing.T) {
+	var gotPostBody string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		// idempotency check: Parent(10) — returns 404 (no parent)
+		case r.Method == "GET" && strings.HasSuffix(r.URL.Path, "/parent"):
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			_ = json.NewEncoder(w).Encode(map[string]string{"message": "Not Found"})
+
+		// issueNumberToID(10)
+		case r.Method == "GET" && strings.HasSuffix(r.URL.Path, "/issues/10"):
+			respondJSON(w, http.StatusOK, &gh.Issue{Number: gh.Ptr(10), ID: gh.Ptr(int64(1000))})
+
+		// SubIssue.Add(1, {SubIssueID: 1000})
+		case r.Method == "POST" && strings.Contains(r.URL.Path, "/sub_issues"):
+			var body gh.SubIssueRequest
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			b, _ := json.Marshal(body)
+			gotPostBody = string(b)
+			respondJSON(w, http.StatusOK, &gh.SubIssue{})
+
+		default:
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}))
+	defer srv.Close()
+
+	f := githubadapter.New(srv.URL, "owner", "repo", srv.Client())
+
+	err := f.Relations().AddParentOf(context.Background(), 1, 10)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotPostBody != `{"sub_issue_id":1000}` {
+		t.Errorf("POST body = %q, want %q", gotPostBody, `{"sub_issue_id":1000}`)
+	}
+}
+
+func TestRelationAddParentOfIdempotent(t *testing.T) {
+	var apiCalls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		apiCalls++
+		// idempotency check: Parent(10) — returns issue 1 as parent
+		if r.Method == "GET" && strings.HasSuffix(r.URL.Path, "/parent") {
+			respondJSON(w, http.StatusOK, &gh.Issue{
+				Number: gh.Ptr(1), Title: gh.Ptr("Parent"), State: gh.Ptr("open"),
+			})
+			return
+		}
+		t.Errorf("unexpected API call: %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	f := githubadapter.New(srv.URL, "owner", "repo", srv.Client())
+
+	err := f.Relations().AddParentOf(context.Background(), 1, 10)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if apiCalls != 1 {
+		t.Errorf("expected 1 API call for idempotency check, got %d", apiCalls)
+	}
+}
+
+func TestRelationRemoveParentOf(t *testing.T) {
+	var gotDeletePath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		// idempotency check: Parent(10) — returns issue 1 as parent
+		case r.Method == "GET" && strings.HasSuffix(r.URL.Path, "/parent"):
+			respondJSON(w, http.StatusOK, &gh.Issue{
+				Number: gh.Ptr(1), Title: gh.Ptr("Parent"), State: gh.Ptr("open"),
+			})
+
+		// issueNumberToID(10)
+		case r.Method == "GET" && strings.HasSuffix(r.URL.Path, "/issues/10"):
+			respondJSON(w, http.StatusOK, &gh.Issue{Number: gh.Ptr(10), ID: gh.Ptr(int64(1000))})
+
+		// SubIssue.Remove(1, {SubIssueID: 1000})
+		case r.Method == "DELETE" && strings.Contains(r.URL.Path, "/sub_issue"):
+			gotDeletePath = r.URL.Path
+			respondJSON(w, http.StatusOK, &gh.SubIssue{})
+
+		default:
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}))
+	defer srv.Close()
+
+	f := githubadapter.New(srv.URL, "owner", "repo", srv.Client())
+
+	err := f.Relations().RemoveParentOf(context.Background(), 1, 10)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.HasSuffix(gotDeletePath, "/issues/1/sub_issue") {
+		t.Errorf("DELETE path = %q, want suffix .../issues/1/sub_issue", gotDeletePath)
+	}
+}
+
+func TestRelationRemoveParentOfIdempotent(t *testing.T) {
+	var apiCalls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		apiCalls++
+		// idempotency check: Parent(10) — returns 404 (no parent)
+		if r.Method == "GET" && strings.HasSuffix(r.URL.Path, "/parent") {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			_ = json.NewEncoder(w).Encode(map[string]string{"message": "Not Found"})
+			return
+		}
+		t.Errorf("unexpected API call: %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	f := githubadapter.New(srv.URL, "owner", "repo", srv.Client())
+
+	err := f.Relations().RemoveParentOf(context.Background(), 1, 10)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if apiCalls != 1 {
+		t.Errorf("expected 1 API call for idempotency check, got %d", apiCalls)
+	}
+}
