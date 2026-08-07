@@ -23,7 +23,7 @@ func newSkillsCmd() *cobra.Command {
 
 Agent harnesses discover skills in ~/.agents/skills/. The skills
 subcommand extracts the embedded SKILL.md from the binary and installs
-it to ~/.agents/skills/anvil/, keeping the skill version-locked
+it to ~/.agents/skills/generated/anvil/, keeping the skill version-locked
 to the binary.`,
 	}
 	cmd.AddCommand(
@@ -43,7 +43,7 @@ func skillsDir() (string, error) {
 	if err != nil {
 		return "", forge.NewBaseError("cannot determine home directory", "Set $HOME")
 	}
-	return filepath.Join(home, ".agents", "skills", "anvil"), nil
+	return filepath.Join(home, ".agents", "skills", "generated", "anvil"), nil
 }
 
 // embeddedSkills returns the list of skill file paths embedded in the binary.
@@ -66,8 +66,8 @@ func embeddedSkills() ([]string, error) {
 func newSkillsInstallCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "install",
-		Short: "Install the skill to ~/.agents/skills/anvil/",
-		Long:  "Extract the embedded SKILL.md from the binary and install it to ~/.agents/skills/anvil/.",
+		Short: "Install the skill to ~/.agents/skills/generated/anvil/",
+		Long:  "Extract the embedded SKILL.md from the binary and install it to ~/.agents/skills/generated/anvil/.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			err := installOrUpdateSkills(cmd.OutOrStdout(), "installed")
 			if err != nil {
@@ -112,7 +112,7 @@ func newSkillsUpdateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update",
 		Short: "Re-install the skill (overwrite)",
-		Long:  "Regenerate and overwrite the skill files in ~/.agents/skills/anvil/.",
+		Long:  "Regenerate and overwrite the skill files in ~/.agents/skills/generated/anvil/.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return regenerateInstalledSkill(cmd.OutOrStdout())
 		},
@@ -124,8 +124,8 @@ func newSkillsUpdateCmd() *cobra.Command {
 func newSkillsUninstallCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "uninstall",
-		Short: "Remove the skill from ~/.agents/skills/anvil/",
-		Long:  "Remove the installed skill directory from ~/.agents/skills/anvil/.",
+		Short: "Remove the skill from ~/.agents/skills/generated/anvil/",
+		Long:  "Remove the installed skill directory from ~/.agents/skills/generated/anvil/.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir, err := skillsDir()
 			if err != nil {

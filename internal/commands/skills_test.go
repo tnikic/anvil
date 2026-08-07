@@ -58,7 +58,7 @@ func TestSkillsInstall(t *testing.T) {
 	}
 
 	// Verify file was created.
-	skillPath := filepath.Join(tmpHome, ".agents", "skills", "anvil", "SKILL.md")
+	skillPath := filepath.Join(tmpHome, ".agents", "skills", "generated", "anvil", "SKILL.md")
 	data, err := os.ReadFile(skillPath)
 	if err != nil {
 		t.Fatalf("SKILL.md should exist at %s: %v", skillPath, err)
@@ -130,7 +130,7 @@ func TestSkillsUninstall(t *testing.T) {
 	}
 
 	// Verify directory is gone.
-	skillDir := filepath.Join(tmpHome, ".agents", "skills", "anvil")
+	skillDir := filepath.Join(tmpHome, ".agents", "skills", "generated", "anvil")
 	if _, err := os.Stat(skillDir); !os.IsNotExist(err) {
 		t.Errorf("skills directory should be removed")
 	}
@@ -242,7 +242,7 @@ func TestSkillsUpdateRegenerates(t *testing.T) {
 	}
 
 	// Verify file was created.
-	skillPath := filepath.Join(tmpHome, ".agents", "skills", "anvil", "SKILL.md")
+	skillPath := filepath.Join(tmpHome, ".agents", "skills", "generated", "anvil", "SKILL.md")
 	data, err := os.ReadFile(skillPath)
 	if err != nil {
 		t.Fatalf("SKILL.md should exist: %v", err)
