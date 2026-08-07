@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/tnikic/anvil/internal/content"
 	"github.com/tnikic/anvil/internal/forge"
 )
 
@@ -65,7 +66,7 @@ func runHome(cmd *cobra.Command, forgeFlag, repoFlag string) error {
 
 	binPath := binPath()
 	_, _ = fmt.Fprintf(w, "bin: %s\n", binPath)
-	_, _ = fmt.Fprintf(w, "description: AXI-compliant Git forge CLI for AI agents\n")
+	_, _ = fmt.Fprintf(w, "description: %s\n", content.Description)
 
 	// Determine forge and repo
 	f, r, err := forge.Detect(forgeFlag, repoFlag)
@@ -76,9 +77,10 @@ func runHome(cmd *cobra.Command, forgeFlag, repoFlag string) error {
 	_, _ = fmt.Fprintf(w, "\nforge: %s\n", f)
 	_, _ = fmt.Fprintf(w, "repo: %s\n", r)
 
-	_, _ = fmt.Fprintf(w, "\nhelp[2]:\n")
-	_, _ = fmt.Fprintf(w, "  Run `anvil issue list` to see open issues\n")
-	_, _ = fmt.Fprintf(w, "  Run `anvil pr list` to see open PRs\n")
+	_, _ = fmt.Fprintf(w, "\nhelp[%d]:\n", len(content.GlobalTips))
+	for _, tip := range content.GlobalTips {
+		_, _ = fmt.Fprintf(w, "  %s\n", tip)
+	}
 
 	return nil
 }
