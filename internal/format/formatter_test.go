@@ -626,7 +626,7 @@ func TestFormatCommentList(t *testing.T) {
 		{ID: 1, Author: "alice", Body: "First comment"},
 		{ID: 2, Author: "bob", Body: "Second comment with a much longer body that should be truncated at 80 characters for display"},
 	}
-	out := format.CommentList(comments, 2, 5)
+	out := format.CommentList(comments, 2, 5, false)
 	if out == "" {
 		t.Fatal("expected non-empty output")
 	}
@@ -646,12 +646,26 @@ func TestFormatCommentList(t *testing.T) {
 }
 
 func TestFormatCommentListEmpty(t *testing.T) {
-	out := format.CommentList([]format.CommentRow{}, 0, 0)
+	out := format.CommentList([]format.CommentRow{}, 0, 0, false)
 	if out == "" {
 		t.Fatal("expected non-empty output even when empty")
 	}
 	if !strings.Contains(out, "0 of 0 comments") {
 		t.Errorf("should show 0 of 0 comments, got: %s", out)
+	}
+}
+
+func TestFormatCommentListFull(t *testing.T) {
+	comments := []format.CommentRow{
+		{ID: 1, Author: "alice", Body: "A comment with a body that is longer than eighty characters long and should not be truncated when full mode is enabled"},
+	}
+	out := format.CommentList(comments, 1, 1, true)
+	if out == "" {
+		t.Fatal("expected non-empty output")
+	}
+	// Full mode should preserve the complete body.
+	if !strings.Contains(out, "should not be truncated when full mode is enabled") {
+		t.Errorf("full mode should not truncate body, got: %s", out)
 	}
 }
 

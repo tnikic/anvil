@@ -249,6 +249,54 @@ func TestIssueCreateMissingTitle(t *testing.T) {
 	}
 }
 
+func TestIssueCreateWithParent(t *testing.T) {
+	fk := setupForgeTest(t)
+
+	buf, err := runCmd("issue", "create",
+		"--forge", "github.com", "--repo", "test/repo",
+		"--title", "Child issue",
+		"--parent", "15",
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "Child issue") {
+		t.Errorf("should contain title, got: %s", out)
+	}
+
+	// Verify AddParentOf was called with correct args.
+	if fk.RelationSvc.LastAddParentOfNumber != 15 {
+		t.Errorf("AddParentOf parent should be 15, got: %d", fk.RelationSvc.LastAddParentOfNumber)
+	}
+	if fk.RelationSvc.LastAddParentOfChild != 42 {
+		t.Errorf("AddParentOf child should be 42 (the new issue number), got: %d", fk.RelationSvc.LastAddParentOfChild)
+	}
+}
+
+func TestIssueCreateWithoutParent(t *testing.T) {
+	fk := setupForgeTest(t)
+
+	buf, err := runCmd("issue", "create",
+		"--forge", "github.com", "--repo", "test/repo",
+		"--title", "Standalone issue",
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "Standalone issue") {
+		t.Errorf("should contain title, got: %s", out)
+	}
+
+	// Verify AddParentOf was NOT called.
+	if fk.RelationSvc.LastAddParentOfNumber != 0 {
+		t.Errorf("AddParentOf should NOT be called without --parent, got parent: %d", fk.RelationSvc.LastAddParentOfNumber)
+	}
+}
+
 func TestIssueUpdate(t *testing.T) {
 	fk := setupForgeTest(t)
 	fk.IssueSvc.Issues = []forge.Issue{
@@ -1307,6 +1355,24 @@ func TestIssueCommentListIncludeSystem(t *testing.T) {
 	}
 	if fk.CommentSvc.LastListOpts.IncludeSystem != true {
 		t.Errorf("IncludeSystem should be true")
+	}
+}
+
+func TestIssueCommentListFull(t *testing.T) {
+	fk := setupForgeTest(t)
+	fk.CommentSvc.Comments = []forge.Comment{
+		{ID: 1, Body: "A comment with a body that is longer than eighty characters long and should not be truncated when --full is used", Author: "alice", System: false},
+	}
+
+	buf, err := runCmd("issue", "comment", "list", "42", "--full", "--forge", "github.com", "--repo", "test/repo")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	out := buf.String()
+	// Full mode should preserve the complete body.
+	if !strings.Contains(out, "should not be truncated when --full is used") {
+		t.Errorf("full mode should not truncate body, got: %s", out)
 	}
 }
 

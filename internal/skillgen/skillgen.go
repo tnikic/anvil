@@ -44,7 +44,7 @@ Run ` + "`" + `anvil <command> --help` + "`" + ` for flags. Key behaviours:
 
 - **PR stacks.** Dependent PR chains tracked via ` + "`" + `[stackname:N/M]` + "`" + ` title prefix. Stack name auto-derived from the branch. ` + "`" + `pr merge` + "`" + ` renumbers remaining open PRs in the stack.
 - **Scoped labels.** ` + "`" + `--scope kind --name bug` + "`" + ` normalizes to each forge's format (` + "`" + `kind:bug` + "`" + ` on GitHub, ` + "`" + `kind::bug` + "`" + ` on GitLab, ` + "`" + `kind/bug` + "`" + ` on Forgejo).
-- **Issue relationships.** ` + "`" + `issue blocked-by` + "`" + `, ` + "`" + `blocking` + "`" + `, ` + "`" + `children` + "`" + `, and ` + "`" + `parent` + "`" + ` query hierarchical relationships. Add with ` + "`" + `issue relation add --blocks` + "`" + ` or ` + "`" + `--parent-of` + "`" + `.
+- **Issue relationships.** ` + "`" + `issue blocked-by` + "`" + `, ` + "`" + `blocking` + "`" + `, ` + "`" + `children` + "`" + `, and ` + "`" + `parent` + "`" + ` query hierarchical relationships. Add with ` + "`" + `issue relation add --blocks` + "`" + ` or ` + "`" + `--parent-of` + "`" + `. Use ` + "`" + `--parent <N>` + "`" + ` on ` + "`" + `issue create` + "`" + ` to set the parent in a single command.
 - **Idempotent mutations.** Closing an already-closed issue exits 0 with a no-op message. Non-zero only when the intent cannot be satisfied.
 - **Errors on stdout.** Structured ` + "`" + `error:` + "`" + ` / ` + "`" + `help:` + "`" + ` lines the agent can read and act on.
 - **Setup hooks.** ` + "`" + `anvil setup hooks` + "`" + ` installs SessionStart hooks for Claude Code, Codex, and OpenCode, injecting live forge context at session start.
@@ -82,7 +82,7 @@ help[2]:
   Run ` + "`" + `anvil pr list` + "`" + ` for all 5 open PRs
 ` + "```" + `
 
-Detail views include truncated bodies (500 chars) with total ` + "`" + `body_size` + "`" + `. Pass ` + "`" + `--full` + "`" + ` for the complete body.
+Detail views include truncated bodies (500 chars) with total ` + "`" + `body_size` + "`" + `. Pass ` + "`" + `--full` + "`" + ` for the complete body. ` + "`" + `comment list` + "`" + ` truncates to 80 chars; ` + "`" + `--full` + "`" + ` returns complete comment bodies.
 
 Errors:
 

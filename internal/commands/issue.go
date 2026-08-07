@@ -292,6 +292,7 @@ func newIssueCreateCmd() *cobra.Command {
 		body      string
 		labels    []string
 		assignees []string
+		parent    int
 	)
 
 	cmd := &cobra.Command{
@@ -300,12 +301,14 @@ func newIssueCreateCmd() *cobra.Command {
 		Long: `Create a new issue in the repository.
 
 At minimum, --title is required. On success, prints a TOON confirmation with
-the new issue's number, title, and URL.`,
+the new issue's number, title, and URL.
+
+Use --parent <N> to automatically set the new issue as a child of issue <N>.`,
 		RunE: wrapForge(func(cmd *cobra.Command, args []string, f forge.Forge) error {
 			if strings.TrimSpace(title) == "" {
 				return forge.NewBaseError(
 					"missing required flag: --title",
-					"Usage: anvil issue create --title \"...\" [--body \"...\"] [--label ...] [--assignee ...]",
+					"Usage: anvil issue create --title \"...\" [--body \"...\"] [--label ...] [--assignee ...] [--parent <N>]",
 				)
 			}
 
@@ -336,6 +339,12 @@ the new issue's number, title, and URL.`,
 				return err
 			}
 
+			if parent != 0 {
+				if err := f.Relations().AddParentOf(cmd.Context(), parent, issue.Number); err != nil {
+					return err
+				}
+			}
+
 			_, _ = fmt.Fprintln(cmd.OutOrStdout(), format.IssueCreateConfirm(issue.Number, issue.Title, issue.URL, autoCreated))
 			return nil
 		}),
@@ -345,6 +354,7 @@ the new issue's number, title, and URL.`,
 	cmd.Flags().StringVar(&body, "body", "", "Issue body (markdown)")
 	cmd.Flags().StringSliceVar(&labels, "label", nil, "Label name (repeatable)")
 	cmd.Flags().StringSliceVar(&assignees, "assignee", nil, "Assignee username (repeatable)")
+	cmd.Flags().IntVar(&parent, "parent", 0, "Set the new issue as a child of issue <N>")
 
 	setFlagErrorFunc(cmd)
 	return cmd
@@ -713,12 +723,18 @@ Subcommands:
 }
 
 func newIssueCommentListCmd() *cobra.Command {
-	var includeSystem bool
+	var (
+		includeSystem bool
+		full          bool
+	)
 
 	cmd := &cobra.Command{
 		Use:   "list <issue-number>",
 		Short: "List comments on an issue",
 		Long: `List comments on an issue in TOON tabular format.
+
+The body is truncated to 80 characters by default. Use --full to see
+complete comment bodies.
 
 System-generated notes (GitLab status changes, label changes, etc.) are
 filtered out by default. Use --include-system to include them.`,
@@ -762,12 +778,13 @@ filtered out by default. Use --include-system to include them.`,
 				}
 			}
 
-			_, _ = fmt.Fprintln(cmd.OutOrStdout(), format.CommentList(rows, len(rows), totalAvailable))
+			_, _ = fmt.Fprintln(cmd.OutOrStdout(), format.CommentList(rows, len(rows), totalAvailable, full))
 			return nil
 		}),
 	}
 
 	cmd.Flags().BoolVar(&includeSystem, "include-system", false, "Include system-generated notes")
+	cmd.Flags().BoolVar(&full, "full", false, "Show full comment bodies without truncation")
 
 	setFlagErrorFunc(cmd)
 	return cmd

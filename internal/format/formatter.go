@@ -530,11 +530,14 @@ type commentConfirmOutput struct {
 }
 
 // CommentList formats a list of comments as TOON tabular output.
-func CommentList(comments []CommentRow, totalIncluded, totalAvailable int) string {
+// When full is true, comment bodies are not truncated.
+func CommentList(comments []CommentRow, totalIncluded, totalAvailable int, full bool) string {
 	// Truncate body to 80 chars for tabular display.
-	for i := range comments {
-		if len(comments[i].Body) > 80 {
-			comments[i].Body = comments[i].Body[:77] + "..."
+	if !full {
+		for i := range comments {
+			if len(comments[i].Body) > 80 {
+				comments[i].Body = comments[i].Body[:77] + "..."
+			}
 		}
 	}
 	out := commentListOutput{
