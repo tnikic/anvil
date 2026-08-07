@@ -1082,9 +1082,6 @@ Output is TOON tabular with number, title, and state.`,
 
 			rows := make([]format.IssueDependencyRow, 0, len(deps))
 			for _, d := range deps {
-				if d.State != forge.StateOpen {
-					continue
-				}
 				rows = append(rows, format.IssueDependencyRow{
 					Number:    d.Number,
 					Title:     d.Title,

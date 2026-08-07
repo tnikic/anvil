@@ -1059,6 +1059,7 @@ func TestIssueChildren(t *testing.T) {
 	fk := setupForgeTest(t)
 	fk.RelationSvc.ChildrenItems = []forge.IssueDependency{
 		{Number: 13, Title: "Sub-task", State: "open", Direction: forge.DirChild},
+		{Number: 14, Title: "Closed child", State: "closed", Direction: forge.DirChild},
 	}
 
 	buf, err := runCmd("issue", "children", "42", "--forge", "github.com", "--repo", "test/repo")
@@ -1069,6 +1070,9 @@ func TestIssueChildren(t *testing.T) {
 	out := buf.String()
 	if !strings.Contains(out, "Sub-task") {
 		t.Errorf("should contain sub-task, got: %s", out)
+	}
+	if !strings.Contains(out, "Closed child") {
+		t.Errorf("should contain closed child, got: %s", out)
 	}
 
 	if fk.RelationSvc.LastChildrenNumber != 42 {
