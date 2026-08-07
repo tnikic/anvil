@@ -84,6 +84,33 @@ type prListOutput struct {
 	Count string `toon:"count"`
 }
 
+// DashboardIssueRow is a row in the dashboard issue output.
+// Schema: {number, title, state, author}.
+type DashboardIssueRow struct {
+	Number int    `toon:"number"`
+	Title  string `toon:"title"`
+	State  string `toon:"state"`
+	Author string `toon:"author"`
+}
+
+// DashboardPRRow is a row in the dashboard PR output.
+// Schema: {number, title, author}.
+type DashboardPRRow struct {
+	Number int    `toon:"number"`
+	Title  string `toon:"title"`
+	Author string `toon:"author"`
+}
+
+type dashboardIssueOutput struct {
+	Issues any    `toon:"issues"`
+	Count  string `toon:"count"`
+}
+
+type dashboardPROutput struct {
+	PRs   any    `toon:"prs"`
+	Count string `toon:"count"`
+}
+
 // DepPR is a dependency row in the PR view.
 type DepPR struct {
 	Number int    `toon:"number"`
@@ -184,6 +211,32 @@ func PRList(prs []PRRow, count, total int) string {
 	s, err := toon.MarshalString(out)
 	if err != nil {
 		return fallbackError("PR list", err)
+	}
+	return s
+}
+
+// DashboardIssueList formats dashboard issues with the schema {number, title, state, author}.
+func DashboardIssueList(issues []DashboardIssueRow, count, total int) string {
+	out := dashboardIssueOutput{
+		Issues: issues,
+		Count:  fmt.Sprintf("%d of %d total", count, total),
+	}
+	s, err := toon.MarshalString(out)
+	if err != nil {
+		return fallbackError("dashboard issues", err)
+	}
+	return s
+}
+
+// DashboardPRList formats dashboard PRs with the schema {number, title, author}.
+func DashboardPRList(prs []DashboardPRRow, count, total int) string {
+	out := dashboardPROutput{
+		PRs:   prs,
+		Count: fmt.Sprintf("%d of %d total", count, total),
+	}
+	s, err := toon.MarshalString(out)
+	if err != nil {
+		return fallbackError("dashboard PRs", err)
 	}
 	return s
 }

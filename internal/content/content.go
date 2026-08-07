@@ -2,6 +2,8 @@
 // shared between the dashboard and the skill generator.
 package content
 
+import "fmt"
+
 // Description is the one-line description of anvil.
 const Description = "AXI-compliant Git forge CLI for AI agents"
 
@@ -21,8 +23,25 @@ var Commands = []CommandDef{
 	{Name: "skills", Short: "Manage the anvil agent skill"},
 }
 
-// GlobalTips are static help hints that appear in both dashboard and skill output.
+// GlobalTips are static help hints shown in fallback output and in the skill.
 var GlobalTips = []string{
-	"Run `anvil issue list` to see open issues",
-	"Run `anvil pr list` to see open PRs",
+	"Run `anvil --forge <host> --repo <owner/name>` to target a repository",
+	"Run `anvil auth set <host> <token>` to authenticate",
+}
+
+// DashboardTips returns contextual help hints based on live dashboard data.
+// When the dashboard can query live data, these replace GlobalTips.
+func DashboardTips(issueTotal, prTotal int) []string {
+	var tips []string
+	if issueTotal > 3 {
+		tips = append(tips, fmt.Sprintf("Run `anvil issue list` for all %d open issues", issueTotal))
+	} else {
+		tips = append(tips, "Run `anvil issue list` to see open issues")
+	}
+	if prTotal > 3 {
+		tips = append(tips, fmt.Sprintf("Run `anvil pr list` for all %d open PRs", prTotal))
+	} else {
+		tips = append(tips, "Run `anvil pr list` to see open PRs")
+	}
+	return tips
 }

@@ -475,8 +475,8 @@ func TestIntegrationForgeDispatch(t *testing.T) {
 	})
 }
 
-// TestSmokeOutsideGitRepo exercises the error path through main():
-// no flags, no git repo → Detect fails → exit 1.
+// TestSmokeOutsideGitRepo exercises the fallback path through main():
+// no flags, no git repo → Detect fails → fallback output, exit 0.
 func TestSmokeOutsideGitRepo(t *testing.T) {
 	bin := buildForge(t)
 
@@ -494,13 +494,16 @@ func TestSmokeOutsideGitRepo(t *testing.T) {
 
 	// Run the binary from outside the repo directory.
 	out, exitCode := runForge(t, bin)
-	if exitCode != 1 {
-		t.Errorf("outside git repo should exit 1, got %d; output: %s", exitCode, out)
+	if exitCode != 0 {
+		t.Errorf("outside git repo should exit 0 (fallback), got %d; output: %s", exitCode, out)
 	}
-	if !strings.Contains(out, "error:") {
-		t.Errorf("outside git repo should print error, got: %s", out)
+	if !strings.Contains(out, "bin:") {
+		t.Errorf("fallback should show bin:, got: %s", out)
 	}
 	if !strings.Contains(out, "--forge") {
-		t.Errorf("outside git repo should suggest --forge, got: %s", out)
+		t.Errorf("fallback should suggest --forge, got: %s", out)
+	}
+	if !strings.Contains(out, "auth set") {
+		t.Errorf("fallback should suggest auth set, got: %s", out)
 	}
 }
