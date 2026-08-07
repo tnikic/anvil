@@ -194,3 +194,87 @@ func TestSkillsHelp(t *testing.T) {
 		t.Error("skills --help should not be empty")
 	}
 }
+
+func TestSkillsCheck(t *testing.T) {
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", tmpHome)
+
+	// --check should pass when embedded skill matches generated.
+	cmd := commands.NewRoot()
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs([]string{"skills", "status", "--check"})
+
+	err := cmd.Execute()
+	if err != nil {
+		t.Fatalf("--check should pass when skill is current: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "status: current") {
+		t.Errorf("should show 'status: current', got: %s", out)
+	}
+}
+
+func TestSkillsUpdateRegenerates(t *testing.T) {
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", tmpHome)
+
+	// Run update directly (no prior install).
+	cmd := commands.NewRoot()
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs([]string{"skills", "update"})
+
+	err := cmd.Execute()
+	if err != nil {
+		t.Fatalf("skills update should not error: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "updated:") {
+		t.Errorf("should report updated, got: %s", out)
+	}
+	if !strings.Contains(out, "skill:") {
+		t.Errorf("should show staleness note, got: %s", out)
+	}
+
+	// Verify file was created.
+	skillPath := filepath.Join(tmpHome, ".agents", "skills", "anvil", "SKILL.md")
+	data, err := os.ReadFile(skillPath)
+	if err != nil {
+		t.Fatalf("SKILL.md should exist: %v", err)
+	}
+	if !strings.Contains(string(data), "name: anvil") {
+		t.Errorf("SKILL.md should contain frontmatter, got: %s", string(data))
+	}
+}
+
+func TestSkillsInstallStaleNote(t *testing.T) {
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", tmpHome)
+
+	cmd := commands.NewRoot()
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs([]string{"skills", "install"})
+
+	err := cmd.Execute()
+	if err != nil {
+		t.Fatalf("skills install should not error: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "installed:") {
+		t.Errorf("should report installed, got: %s", out)
+	}
+	if !strings.Contains(out, "skill:") {
+		t.Errorf("should show staleness note, got: %s", out)
+	}
+	if !strings.Contains(out, "current") && !strings.Contains(out, "stale") {
+		t.Errorf("should show current or stale, got: %s", out)
+	}
+}

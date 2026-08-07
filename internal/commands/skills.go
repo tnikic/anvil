@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/tnikic/anvil/internal/forge"
+	"github.com/tnikic/anvil/internal/skillgen"
 	"github.com/tnikic/anvil/internal/skills"
 )
 
@@ -68,7 +69,12 @@ func newSkillsInstallCmd() *cobra.Command {
 		Short: "Install the skill to ~/.agents/skills/anvil/",
 		Long:  "Extract the embedded SKILL.md from the binary and install it to ~/.agents/skills/anvil/.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return installOrUpdateSkills(cmd.OutOrStdout(), "installed")
+			err := installOrUpdateSkills(cmd.OutOrStdout(), "installed")
+			if err != nil {
+				return err
+			}
+			printStaleNote(cmd.OutOrStdout())
+			return nil
 		},
 	}
 	setFlagErrorFunc(cmd)
@@ -106,9 +112,9 @@ func newSkillsUpdateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update",
 		Short: "Re-install the skill (overwrite)",
-		Long:  "Re-extract and overwrite the skill files in ~/.agents/skills/anvil/.",
+		Long:  "Regenerate and overwrite the skill files in ~/.agents/skills/anvil/.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return installOrUpdateSkills(cmd.OutOrStdout(), "updated")
+			return regenerateInstalledSkill(cmd.OutOrStdout())
 		},
 	}
 	setFlagErrorFunc(cmd)
@@ -147,11 +153,17 @@ func newSkillsUninstallCmd() *cobra.Command {
 }
 
 func newSkillsStatusCmd() *cobra.Command {
+	var check bool
+
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Show install status",
-		Long:  "Show whether and where the skill is installed.",
+		Long:  "Show whether and where the skill is installed. Use --check to verify the embedded skill matches what this binary would generate.",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if check {
+				return runSkillsCheck(cmd.OutOrStdout())
+			}
+
 			dir, err := skillsDir()
 			if err != nil {
 				return err
@@ -163,9 +175,16 @@ func newSkillsStatusCmd() *cobra.Command {
 			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "name: anvil\n")
 			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "path: %s\n", collapseHome(skillPath))
 			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "installed: %v\n", installed)
+
+			// Also print staleness when installed.
+			if installed {
+				printStaleNote(cmd.OutOrStdout())
+			}
 			return nil
 		},
 	}
+
+	cmd.Flags().BoolVar(&check, "check", false, "Verify embedded skill matches generated output")
 	setFlagErrorFunc(cmd)
 	return cmd
 }
@@ -250,4 +269,87 @@ func copySkills(destDir string) (int, error) {
 		return count, err
 	}
 	return count, nil
+}
+
+// printStaleNote checks whether the embedded SKILL.md is stale and prints
+// a one-line note to w.
+func printStaleNote(w io.Writer) {
+	embedded, err := skillgen.ReadEmbedded(skills.SkillsFS)
+	if err != nil {
+		return
+	}
+	ok, _, err := skillgen.Check(embedded)
+	if err != nil || ok {
+		_, _ = fmt.Fprintf(w, "skill: current\n")
+	} else {
+		_, _ = fmt.Fprintf(w, "skill: stale; run `anvil skills update` to refresh\n")
+	}
+}
+
+// runSkillsCheck implements `anvil skills status --check`.
+// Regenerates in-memory and diffs against the embedded file.
+// Exits 0 when matching, exits 1 on drift.
+func runSkillsCheck(w io.Writer) error {
+	embedded, err := skillgen.ReadEmbedded(skills.SkillsFS)
+	if err != nil {
+		return err
+	}
+
+	ok, diff, err := skillgen.Check(embedded)
+	if err != nil {
+		return err
+	}
+
+	if ok {
+		_, _ = fmt.Fprintf(w, "skill:\n  status: current\n")
+		return nil
+	}
+
+	_, _ = fmt.Fprintf(w, "skill:\n  status: stale\n")
+	if diff != "" {
+		for _, line := range strings.Split(strings.TrimSpace(diff), "\n") {
+			_, _ = fmt.Fprintf(w, "  %s\n", line)
+		}
+	}
+	return forge.NewBaseError(
+		"embedded SKILL.md is stale; regenerate with `go generate ./internal/skills/...`",
+		"Run `anvil skills update` to refresh the installed skill",
+	)
+}
+
+// regenerateInstalledSkill regenerates SKILL.md from the content package
+// and writes it to the installed skill directory.
+func regenerateInstalledSkill(w io.Writer) error {
+	skill, err := skillgen.Render()
+	if err != nil {
+		return err
+	}
+
+	dir, err := skillsDir()
+	if err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		e := forge.NewBaseError(
+			fmt.Sprintf("cannot create skills directory: %v", err),
+			"",
+		)
+		PrintFormatted(w, e)
+		return e
+	}
+
+	skillPath := filepath.Join(dir, "SKILL.md")
+	if err := os.WriteFile(skillPath, []byte(skill), 0o644); err != nil {
+		e := forge.NewBaseError(
+			fmt.Sprintf("cannot write %s: %v", skillPath, err),
+			"",
+		)
+		PrintFormatted(w, e)
+		return e
+	}
+
+	_, _ = fmt.Fprintf(w, "updated: %s\nfiles: 1\n", collapseHome(skillPath))
+	printStaleNote(w)
+	return nil
 }

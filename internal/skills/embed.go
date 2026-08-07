@@ -3,6 +3,8 @@ package skills
 
 import "embed"
 
+//go:generate go run github.com/tnikic/anvil/cmd/skillgen -o anvil/SKILL.md
+
 // SkillsFS embeds the anvil skill directory.
 //
 //go:embed anvil

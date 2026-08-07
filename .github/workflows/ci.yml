@@ -56,6 +56,17 @@ jobs:
           go-version-file: go.mod
       - run: go test -race ./...
 
+  generate:
+    name: Generate check (SKILL.md drift)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - run: go generate ./internal/skills/...
+      - run: git diff --exit-code -- internal/skills/anvil/SKILL.md
+
   build:
     name: Build
     runs-on: ubuntu-latest
