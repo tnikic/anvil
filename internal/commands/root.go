@@ -58,6 +58,7 @@ func NewRoot() *cobra.Command {
 		newPRCmd(),
 		newAuthCmd(),
 		newSkillsCmd(),
+		newSetupCmd(),
 	)
 
 	return cmd
